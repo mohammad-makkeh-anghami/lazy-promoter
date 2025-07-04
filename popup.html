@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>GitHub Promote Setup</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+          Helvetica, Arial, sans-serif;
+        width: 500px;
+        padding: 20px;
+        background: #0d1117;
+        color: #f0f6fc;
+        line-height: 1.5;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #21262d;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+          monospace;
+      }
+
+      h4 {
+        font-size: 18px;
+        
+        text-transform: lowercase;
+        font-weight: 600;
+        color: #f0f6fc;
+      }
+
+      .header .version {
+        font-size: 12px;
+        color: #8b949e;
+      }
+
+      .input-group {
+        margin-bottom: 10px;
+      }
+
+      label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      input {
+        width: 100%;
+        padding: 12px 14px;
+        font-size: 14px;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        background: #21262d;
+        color: #f0f6fc;
+        transition: all 0.2s ease;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: #1f6feb;
+        box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.15);
+        background: #161b22;
+      }
+
+      input::placeholder {
+        color: #6e7681;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      button {
+        flex: 1;
+        padding: 12px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+
+      .btn-primary {
+        color: #ffffff;
+        background: #691ce5;
+        border-color: rgba(240, 246, 252, 0.1);
+      }
+
+      .btn-primary:hover {
+        background: #6f2bdd;
+      }
+
+      .btn-primary:active {
+        background: #691ce5;
+      }
+
+      .btn-danger {
+        color: #ffffff;
+        background: #da3633;
+        border-color: rgba(240, 246, 252, 0.1);
+      }
+
+      .btn-danger:hover {
+        background: #e5484d;
+      }
+
+      .btn-danger:active {
+        background: #da3633;
+      }
+
+      .info-text {
+        font-size: 12px;
+        color: #8b949e;
+        padding: 12px;
+        background: #161b22;
+        border-radius: 4px;
+        border-left: 3px solid #1f6feb;
+        line-height: 1.4;
+      }
+
+      .info-text code {
+        background: #30363d;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+          monospace;
+        font-size: 11px;
+        color: #f0f6fc;
+      }
+
+      .info-text.success {
+        border-left: 3px solid #3fb950;
+      }
+
+      #deleteToken {
+        display: none;
+      }
+
+      .create-token-link{
+        color: #387feb;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h4>Lazy /promoter</h4>
+      <div class="version">v1.0.0</div>
+    </div>
+
+    <div class="input-group">
+      <label for="tokenInput"
+        >
+        <span>GitHub Personal Access Token</span>
+        <a
+          href="https://github.com/settings/tokens"
+          target="_blank"
+          class="create-token-link"
+          >Create one here</a
+        ></label
+      >
+      <input
+        type="password"
+        id="tokenInput"
+        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+      />
+    </div>
+
+    <div class="button-group">
+      <button id="saveToken" class="btn-primary">Save Token</button>
+      <button id="deleteToken" class="btn-danger">Delete Token</button>
+    </div>
+
+    <div class="info-text" id="infoText">
+      Token with <code>repo</code> scope required for
+      anghami/web-streaming-monorepo
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
