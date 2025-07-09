@@ -1,5 +1,3 @@
-let addedPromoteButton = false;
-
 async function getToken() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(['lazy_promoter_pat_token'], function (result) {
@@ -10,7 +8,7 @@ async function getToken() {
 
 async function addPromoteButton() {
   // Only add button if it's not already there
-  if (addedPromoteButton || document.getElementById('promote-btn')) return;
+  if (document.getElementById('promote-btn')) return;
 
   // Check if we're on the correct repo (extra safety)
   const pathParts = window.location.pathname.split('/');
@@ -214,7 +212,6 @@ async function addPromoteButton() {
 
   // Append after the comment textarea
   toolbar.appendChild(btn);
-  addedPromoteButton = true;
 }
 
 // Initialize after DOM is ready
@@ -230,8 +227,7 @@ if (document.readyState === 'loading') {
   addPromoteButton();
 }
 
+// github naviagtes without full page reload, so if we did not start at the pr page, the code will not find the toolbar div to add the button, and it wont trigger again when we navigate to the pr page
 setInterval(() => {
-  if(!addedPromoteButton) {
-    addPromoteButton();
-  }
+  addPromoteButton();
 }, 1000);
