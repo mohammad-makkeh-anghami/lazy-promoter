@@ -4,20 +4,28 @@
 
 *Because typing `/promote` is way too much work*
 
-This Chrome extension adds a "🚀 Promote" button to pull requests in the `anghami/web-streaming-monorepo` repository.
+This Chrome extension adds a "🚀 Promote" button and a "🧪 Run tests" dropdown to pull requests in the `anghami/web-streaming-monorepo` repository.
 
 <img src="https://i.imgur.com/BHHQVcj.png" alt="example" style="border-radius: 6px; border: 1px solid #fff2"/>
 
 ## What it does
 
+### Promote Button
 - Posts `/promote` comment via GitHub API
 - Makes the rocket emoji launch off when you click it (because why not waste company time to please yourself?)
+
+### Run Tests Dropdown
+- Adds a dropdown button next to the Promote button
+- Provides quick access to run e2e tests:
+  - **Run TV e2e tests** - Posts `/test-e2e tv` comment
+  - **Run Web e2e tests** - Posts `/test-e2e web` comment
+- Shows loading and success states, just like the Promote button
 
 ## Setup
 
 ### 1. Download the extension
 ```bash
-git clone git@github.com:anghami/web-streaming-monorepo.git
+git clone git@github.com:mohammad-makkeh-anghami/lazy-promoter.git
 # or just download the zip like a normal person
 ```
 
