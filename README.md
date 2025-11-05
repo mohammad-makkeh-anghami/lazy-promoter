@@ -6,7 +6,7 @@
 
 This Chrome extension adds a "🚀 Promote" button and a "🧪 Run tests" dropdown to pull requests in the `anghami/web-streaming-monorepo` repository.
 
-<img src="https://i.imgur.com/BHHQVcj.png" alt="example" style="border-radius: 6px; border: 1px solid #fff2"/>
+<img src="./example.png" alt="example" style="border-radius: 6px; border: 1px solid #fff2"/>
 
 ## What it does
 
