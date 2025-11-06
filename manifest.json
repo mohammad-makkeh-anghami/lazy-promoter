@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Lazy Promoter",
   "description": "Adds a Promote button to PRs in anghami/web-streaming-monorepo for lazy people who don't want to scroll then comment '/promote'",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["https://github.com/*"],
   "action": {

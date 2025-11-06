@@ -220,64 +220,146 @@ function animateRocketLaunch(emojiElement) {
   }, duration);
 }
 
-// ==================== Dropdown Functions ====================
+// ==================== Tabbed Popover Functions ====================
 
-function ensureDropdownStyles() {
-  if (document.getElementById('dropdown-styles')) return;
+
+function ensureTabbedPopoverStyles() {
+  if (document.getElementById('tabbed-popover-styles')) return;
   
   const style = document.createElement('style');
-  style.id = 'dropdown-styles';
+  style.id = 'tabbed-popover-styles';
   style.textContent = `
-    .test-dropdown-container {
+    .test-popover-container {
       position: relative;
       display: inline-block;
       order: 99;
     }
     
-    .test-dropdown-menu {
+    .test-popover-menu {
       position: absolute;
       top: calc(100% + 4px);
       right: 0;
-      min-width: 200px;
+      width: 400px;
+      max-width: calc(100vw - 320px);
       background-color: var(--overlay-bgColor);
       border: var(--borderWidth-thin) solid var(--borderColor-default);
       border-radius: 6px;
       box-shadow: var(--shadow-extra-large);
-      padding: 4px 0;
+      padding: 0;
       margin: 0;
-      list-style: none;
       z-index: 1000;
+      display: none;
+      overflow: hidden;
+    }
+    
+    .test-popover-menu.show {
+      display: block;
+    }
+    
+    .test-tabnav {
+      background-color: var(--color-canvas-subtle);
+      margin: 0;
+      border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+    }
+    
+    .test-tabnav-tabs {
+      display: flex;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .test-tabnav-wrapper {
+      flex: 1;
+      display: inline-flex;
+    }
+    
+    .test-tabnav-tab {
+      flex: 1;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      text-align: center;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--color-fg-muted);
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+    
+    .test-tabnav-tab:hover {
+      color: var(--color-fg-default);
+    }
+    
+    .test-tabnav-tab[aria-selected="true"] {
+      color: var(--color-fg-default);
+      background-color: var(--overlay-bgColor);
+      border-bottom-color: var(--color-primer-border-active);
+    }
+    
+    .test-tabpanel {
+      display: block;
+    }
+    
+    .test-tabpanel[hidden] {
       display: none;
     }
     
-    .test-dropdown-menu.show {
-      display: block;
-    }
-
-    .test-dropdown-option {
-      padding: 2px 6px;
+    .test-tabpanel-content {
+      padding: 16px;
     }
     
-    .test-dropdown-item {
+    .test-input-group {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    
+    .test-input-wrapper {
+      flex: 1;
+    }
+    
+    .test-input-label {
       display: block;
-      width: 100%;
-      padding: 8px 16px;
-      text-align: left;
-      font-size: 14px;
+      font-size: 12px;
       color: var(--color-fg-default);
-      border-radius: 4px;
-      background: transparent;
-      border: none;
+      margin-bottom: 10px;
+    }
+    
+    .test-input {
+      width: 100%;
+    }
+     
+    .test-run-button {
+      padding: 5px 16px;
+      height: 28px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-btn-primary-text, #ffffff);
+      background-color: var(--color-btn-primary-bg, #2da44e);
+      border: 1px solid var(--color-btn-primary-border, #2da44e);
+      border-radius: 6px;
       cursor: pointer;
-      transition: background-color 0.1s;
+      transition: background-color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
     }
     
-    .test-dropdown-item:hover {
-      background-color: var(--bgColor-muted) !important;
+    .test-run-button:hover {
+      background-color: var(--color-btn-primary-hover-bg, #2c974b);
+      border-color: var(--color-btn-primary-hover-border, #2c974b);
     }
     
-    .test-dropdown-item:active {
-      background-color: var(--bgColor-muted) !important;
+    .test-run-button:active {
+      background-color: var(--color-btn-primary-selected-bg, #298e46);
+      border-color: var(--color-btn-primary-selected-border, #298e46);
+    }
+    
+    .test-run-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     
     .test-dropdown-chevron {
@@ -292,15 +374,15 @@ function ensureDropdownStyles() {
   document.head.appendChild(style);
 }
 
-function createDropdownButton() {
-  ensureDropdownStyles();
+function createTabbedPopover() {
+  ensureTabbedPopoverStyles();
   
   // GitHub's chevron down icon SVG
   const chevronSvg = '<svg class="test-dropdown-chevron" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4.427 9.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 9H4.604a.25.25 0 00-.177.427z"></path></svg>';
   const originalContent = `<div style="display: inline-flex;">🧪&nbsp;&nbsp;Run tests${chevronSvg}</div>`;
   
   const container = document.createElement('div');
-  container.className = 'test-dropdown-container';
+  container.className = 'test-popover-container';
   
   const btn = document.createElement('button');
   btn.id = 'test-dropdown-btn';
@@ -309,65 +391,243 @@ function createDropdownButton() {
   btn.style.cssText = getGitHubButtonStyle();
   addGitHubButtonHover(btn);
   
-  const menu = document.createElement('ul');
-  menu.className = 'test-dropdown-menu';
-  menu.id = 'test-dropdown-menu';
+  // Create popover menu
+  const popover = document.createElement('div');
+  popover.className = 'test-popover-menu dropdown-menu dropdown-menu-sw p-0 overflow-hidden';
+  popover.id = 'test-popover-menu';
   
-  const tvOption = document.createElement('li');
-  tvOption.className = 'test-dropdown-option';
-  const tvButton = document.createElement('button');
-  tvButton.className = 'test-dropdown-item';
-  tvButton.textContent = 'Run TV e2e tests';
-  tvOption.appendChild(tvButton);
+  // Create tab container
+  const tabContainer = document.createElement('div');
   
-  const webOption = document.createElement('li');
-  webOption.className = 'test-dropdown-option';
-  const webButton = document.createElement('button');
-  webButton.className = 'test-dropdown-item';
-  webButton.textContent = 'Run Web e2e tests';
-  webOption.appendChild(webButton);
+  // Create tabnav
+  const tabnav = document.createElement('div');
+  tabnav.className = 'tabnav hx_tabnav-in-dropdown color-bg-subtle m-0';
   
-  menu.appendChild(tvOption);
-  menu.appendChild(webOption);
+  const tabList = document.createElement('ul');
+  tabList.className = 'tabnav-tabs d-flex';
+  tabList.setAttribute('role', 'tablist');
+  tabList.setAttribute('aria-label', 'Choose test platform');
+  
+  // TV Tab
+  const tvTabWrapper = document.createElement('li');
+  tvTabWrapper.className = 'hx_tabnav-in-dropdown-wrapper flex-1 d-inline-flex';
+  tvTabWrapper.setAttribute('role', 'presentation');
+  
+  const tvTab = document.createElement('button');
+  tvTab.id = 'tv-tab';
+  tvTab.className = 'tabnav-tab flex-1';
+  tvTab.setAttribute('role', 'tab');
+  tvTab.setAttribute('aria-controls', 'tv-panel');
+  tvTab.setAttribute('aria-selected', 'true');
+  tvTab.setAttribute('tabindex', '0');
+  tvTab.textContent = 'TV';
+  
+  tvTabWrapper.appendChild(tvTab);
+  tabList.appendChild(tvTabWrapper);
+  
+  // Web Tab
+  const webTabWrapper = document.createElement('li');
+  webTabWrapper.className = 'hx_tabnav-in-dropdown-wrapper flex-1 d-inline-flex';
+  webTabWrapper.setAttribute('role', 'presentation');
+  
+  const webTab = document.createElement('button');
+  webTab.id = 'web-tab';
+  webTab.className = 'tabnav-tab flex-1';
+  webTab.setAttribute('role', 'tab');
+  webTab.setAttribute('aria-controls', 'web-panel');
+  webTab.setAttribute('aria-selected', 'false');
+  webTab.setAttribute('tabindex', '-1');
+  webTab.textContent = 'Web';
+  
+  webTabWrapper.appendChild(webTab);
+  tabList.appendChild(webTabWrapper);
+  
+  tabnav.appendChild(tabList);
+  tabContainer.appendChild(tabnav);
+  
+  // TV Panel
+  const tvPanel = document.createElement('div');
+  tvPanel.id = 'tv-panel';
+  tvPanel.className = 'test-tabpanel';
+  tvPanel.setAttribute('role', 'tabpanel');
+  tvPanel.setAttribute('tabindex', '0');
+  tvPanel.setAttribute('aria-labelledby', 'tv-tab');
+  
+  const tvPanelContent = document.createElement('div');
+  tvPanelContent.className = 'test-tabpanel-content';
+  
+  const tvInputGroup = document.createElement('div');
+  tvInputGroup.className = 'd-flex flex-items-end mt-2';
+  tvInputGroup.style.gap = '8px';
+  
+  const tvInputWrapper = document.createElement('div');
+  tvInputWrapper.className = 'flex-1';
+  
+  const tvLabel = document.createElement('label');
+  tvLabel.className = 'text-bold d-block test-input-label';
+  tvLabel.textContent = 'Parts to test(comma separated)';
+  
+  const tvInput = document.createElement('input');
+  tvInput.type = 'text';
+  tvInput.className = 'form-control input-monospace input-sm color-bg-subtle test-input';
+  tvInput.placeholder = 'search,profiles';
+  tvInput.id = 'tv-input';
+  
+  tvInputWrapper.appendChild(tvLabel);
+  tvInputWrapper.appendChild(tvInput);
+  tvInputGroup.appendChild(tvInputWrapper);
+  
+  const tvRunButton = document.createElement('button');
+  tvRunButton.className = 'btn btn-primary btn-sm';
+  tvRunButton.textContent = 'Run';
+  tvRunButton.type = 'button';
+  
+  tvInputGroup.appendChild(tvRunButton);
+  tvPanelContent.appendChild(tvInputGroup);
+  tvPanel.appendChild(tvPanelContent);
+  
+  // Web Panel
+  const webPanel = document.createElement('div');
+  webPanel.id = 'web-panel';
+  webPanel.className = 'test-tabpanel';
+  webPanel.setAttribute('role', 'tabpanel');
+  webPanel.setAttribute('tabindex', '0');
+  webPanel.setAttribute('aria-labelledby', 'web-tab');
+  webPanel.setAttribute('hidden', 'hidden');
+  
+  const webPanelContent = document.createElement('div');
+  webPanelContent.className = 'test-tabpanel-content';
+  
+  const webInputGroup = document.createElement('div');
+  webInputGroup.className = 'd-flex flex-items-end mt-2';
+  webInputGroup.style.gap = '8px';
+  
+  const webInputWrapper = document.createElement('div');
+  webInputWrapper.className = 'flex-1';
+  
+  const webLabel = document.createElement('label');
+  webLabel.className = 'text-bold d-block test-input-label';
+  webLabel.textContent = 'Parts to test(comma separated)';
+  
+  const webInput = document.createElement('input');
+  webInput.type = 'text';
+  webInput.className = 'form-control input-monospace input-sm color-bg-subtle';
+  webInput.placeholder = 'search,profiles';
+  webInput.id = 'web-input';
+  
+  webInputWrapper.appendChild(webLabel);
+  webInputWrapper.appendChild(webInput);
+  webInputGroup.appendChild(webInputWrapper);
+  
+  const webRunButton = document.createElement('button');
+  webRunButton.className = 'btn btn-primary btn-sm';
+  webRunButton.textContent = 'Run';
+  webRunButton.type = 'button';
+  
+  webInputGroup.appendChild(webRunButton);
+  webPanelContent.appendChild(webInputGroup);
+  webPanel.appendChild(webPanelContent);
+  
+  tabContainer.appendChild(tvPanel);
+  tabContainer.appendChild(webPanel);
+  popover.appendChild(tabContainer);
   
   container.appendChild(btn);
-  container.appendChild(menu);
+  container.appendChild(popover);
   
-  // Toggle dropdown on button click
-  btn.onclick = (e) => {
+  // Tab switching logic
+  function switchTab(selectedTab, selectedPanel, otherTab, otherPanel) {
+    selectedTab.setAttribute('aria-selected', 'true');
+    selectedTab.setAttribute('tabindex', '0');
+    selectedPanel.removeAttribute('hidden');
+    
+    otherTab.setAttribute('aria-selected', 'false');
+    otherTab.setAttribute('tabindex', '-1');
+    otherPanel.setAttribute('hidden', 'hidden');
+  }
+  
+  tvTab.onclick = (e) => {
     e.stopPropagation();
-    menu.classList.toggle('show');
+    switchTab(tvTab, tvPanel, webTab, webPanel);
   };
   
-  // Close dropdown when clicking outside
+  webTab.onclick = (e) => {
+    e.stopPropagation();
+    switchTab(webTab, webPanel, tvTab, tvPanel);
+  };
+  
+  // Keyboard navigation
+  tvTab.onkeydown = (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      switchTab(webTab, webPanel, tvTab, tvPanel);
+      webTab.focus();
+    }
+  };
+  
+  webTab.onkeydown = (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      switchTab(tvTab, tvPanel, webTab, webPanel);
+      tvTab.focus();
+    }
+  };
+  
+  // Toggle popover on button click
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    popover.classList.toggle('show');
+  };
+  
+  // Close popover when clicking outside
   document.addEventListener('click', (e) => {
     if (!container.contains(e.target)) {
-      menu.classList.remove('show');
+      popover.classList.remove('show');
     }
   });
   
-  // Handle option clicks
-  
-  tvButton.onclick = async (e) => {
+  // Handle Run button clicks
+  tvRunButton.onclick = async (e) => {
     e.stopPropagation();
-    menu.classList.remove('show');
+    const parts = tvInput.value.trim();
+    const comment = parts ? `/test-e2e tv > ${parts}` : '/test-e2e tv';
+    
+    popover.classList.remove('show');
     await handleButtonAction(
       btn,
-      '/test-e2e tv',
+      comment,
       originalContent,
       '<div>✅</div><div>Testing TV</div>'
     );
   };
   
-  webButton.onclick = async (e) => {
+  webRunButton.onclick = async (e) => {
     e.stopPropagation();
-    menu.classList.remove('show');
+    const parts = webInput.value.trim();
+    const comment = parts ? `/test-e2e web > ${parts}` : '/test-e2e web';
+    
+    popover.classList.remove('show');
     await handleButtonAction(
       btn,
-      '/test-e2e web',
+      comment,
       originalContent,
       '<div>✅</div><div>Testing Web</div>'
     );
+  };
+  
+  // Allow Enter key to trigger Run button
+  tvInput.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      tvRunButton.click();
+    }
+  };
+  
+  webInput.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      webRunButton.click();
+    }
   };
   
   return container;
@@ -418,8 +678,8 @@ async function addTestDropdown() {
   const toolbar = document.querySelector('.gh-header-actions');
   if (!toolbar) return; 
 
-  const dropdown = createDropdownButton();
-  toolbar.appendChild(dropdown);
+  const popover = createTabbedPopover();
+  toolbar.appendChild(popover);
 }
 
 async function addButtons() {
