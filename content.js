@@ -13,9 +13,14 @@ function getPRInfo() {
   return { owner, repo, prNumber };
 }
 
-function isCorrectRepo() {
+function isStreamingRepo() {
   const pathParts = window.location.pathname.split('/');
   return pathParts[1] === 'anghami' && pathParts[2] === 'web-streaming-monorepo';
+}
+
+function isArgoCDRepo() {
+  const pathParts = window.location.pathname.split('/');
+  return pathParts[1] === 'anghami' && pathParts[2] === 'argocd';
 }
 
 // ==================== Button Styling ====================
@@ -124,6 +129,30 @@ async function postPRComment(comment, token) {
   }
 
   return res;
+}
+
+async function lazyApprovePR(token) {
+  const { owner, repo, prNumber } = getPRInfo();
+  
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/reviews`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      event: 'APPROVE',
+      body: 'Approved via Lazy Promoter'
+    })
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || `HTTP ${res.status}`);
+  }
+
+  return res.json();
 }
 
 async function handleButtonAction(btn, comment, originalContent, successContent, onSuccess) {
@@ -637,7 +666,7 @@ function createTabbedPopover() {
 
 async function addPromoteButton() {
   if (document.getElementById('promote-btn')) return;
-  if (!isCorrectRepo()) return;
+  if (!isStreamingRepo()) return;
   
   const token = await getToken();
   if (!token) return;
@@ -670,7 +699,7 @@ async function addPromoteButton() {
 
 async function addTestDropdown() {
   if (document.getElementById('test-dropdown-btn')) return;
-  if (!isCorrectRepo()) return;
+  if (!isStreamingRepo()) return;
   
   const token = await getToken();
   if (!token) return;
@@ -682,9 +711,42 @@ async function addTestDropdown() {
   toolbar.appendChild(popover);
 }
 
+async function addApproveButton() {
+  if (document.getElementById('approve-btn')) return;
+  if (!isArgoCDRepo()) return;
+  
+  const token = await getToken();
+  if (!token) return;
+
+  const toolbar = document.querySelector('.gh-header-actions');
+  if (!toolbar) return; 
+
+  const btn = document.createElement('button');
+  btn.id = 'approve-btn';
+  const originalContent = '<div>👍</div><div>Approve</div>';
+  btn.innerHTML = originalContent;
+  btn.type = 'button';
+  btn.style.cssText = getGitHubButtonStyle();
+  addGitHubButtonHover(btn);
+
+  btn.onclick = async () => {
+    setButtonLoading(btn, originalContent);
+    try {
+      await lazyApprovePR(token);
+      setButtonSuccess(btn, '<div>✅</div><div>Approved</div>', originalContent);
+    } catch (error) {
+      setButtonError(btn, '<div>❌</div><div>Error</div>', originalContent);
+      alert('❌ Failed to approve PR: ' + error.message);
+    }
+  };
+
+  toolbar.appendChild(btn);
+}
+
 async function addButtons() {
   await addPromoteButton();
   await addTestDropdown();
+  await addApproveButton();
 }
 
 // Initialize after DOM is ready

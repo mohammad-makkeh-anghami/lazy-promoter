@@ -4,7 +4,9 @@
 
 *Because typing `/promote` is way too much work*
 
-This Chrome extension adds a "🚀 Promote" button and a "🧪 Run tests" dropdown to pull requests in the `anghami/web-streaming-monorepo` repository.
+This Chrome extension adds:
+- "🚀 Promote" button and "🧪 Run tests" dropdown on PRs in `anghami/web-streaming-monorepo`
+- "👍 Approve" button on PRs in `anghami/argocd`
 
 <img src="./example.png" alt="example" style="border-radius: 6px; border: 1px solid #fff2"/>
 
@@ -20,6 +22,15 @@ This Chrome extension adds a "🚀 Promote" button and a "🧪 Run tests" dropdo
   - **Run TV e2e tests** - Posts `/test-e2e tv` comment
   - **Run Web e2e tests** - Posts `/test-e2e web` comment
 - Shows loading and success states, just like the Promote button
+
+### Approve Button (argocd only)
+- Appears only on PR pages in `anghami/argocd`
+- Approves the PR in a single click using GitHub’s reviews API (`event: "APPROVE"`)
+- Shows loader and success/error states
+- Requirements and caveats:
+  - You must have permission to review in the repo
+  - You cannot approve your own PR
+  - Draft PRs cannot be approved
 
 ## Setup
 
@@ -38,7 +49,7 @@ git clone git@github.com:mohammad-makkeh-anghami/lazy-promoter.git
 ### 3. Get a GitHub token
 1. Go to [GitHub Personal Access Tokens](https://github.com/settings/tokens)
 2. Click "Generate new token (classic)"
-3. Give it `repo` scope (it needs to comment on PRs)
+3. Give it `repo` scope (needed to comment and to approve PRs)
 
 ### 4. Configure the extension
 1. Open the extension
@@ -49,7 +60,9 @@ git clone git@github.com:mohammad-makkeh-anghami/lazy-promoter.git
 
 - Your GitHub token is stored securely using Chrome's sync storage
 - The token never leaves your browser except to talk to GitHub's API
-- The extension only activates on our specific repository
+- The extension only activates on our specific repositories:
+  - `anghami/web-streaming-monorepo` (Promote, Run tests)
+  - `anghami/argocd` (Approve)
 
 
 > This is an experiment to see how we can improve DX and productivity using such tools. I may end up creating a full toolbar for anghami + osn stuff that is added to our GitHub pages if you guys suggest some stuff that could be useful
