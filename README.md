@@ -40,6 +40,7 @@ Automatically scores PRs on the pull request list page to help you prioritize wh
 - PRs are color-coded: **green** (score ≥ 4) or **red** (score < 4)
 - Higher saturation = more extreme score (very good or very bad)
 - Draft PRs are ignored entirely
+- PRs you've already reviewed are ignored (unless your review was dismissed or new commits were pushed)
 
 **Scoring criteria:**
 

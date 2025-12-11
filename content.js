@@ -252,7 +252,7 @@ async function handleButtonAction(btn, comment, originalContent, successContent,
 
 // ==================== PR Reviewability Scoring ====================
 
-async function fetchPRReviewabilityData(owner, repo, prNumber, token) {
+async function fetchPRReviewabilityData(owner, repo, prNumber, token, currentUserLogin) {
   const normalizedPrNumber = String(prNumber || '').trim();
   if (!normalizedPrNumber || !/^\d+$/.test(normalizedPrNumber)) {
     return {
@@ -261,7 +261,8 @@ async function fetchPRReviewabilityData(owner, repo, prNumber, token) {
       descriptionStatus: null,
       ciFailed: null,
       isDraft: null,
-      reviewerCount: null
+      reviewerCount: null,
+      userAlreadyReviewed: null
     };
   }
 
@@ -277,6 +278,7 @@ async function fetchPRReviewabilityData(owner, repo, prNumber, token) {
   let headSha = null;
   let isDraft = null;
   let reviewerCount = null;
+  let userAlreadyReviewed = false;
 
   // Fetch PR details
   try {
@@ -387,13 +389,45 @@ async function fetchPRReviewabilityData(owner, repo, prNumber, token) {
     }
   }
 
+  // Check if current user has already submitted a non-dismissed, non-stale review
+  // A review is stale if new commits were pushed after the review (commit_id != head SHA)
+  if (currentUserLogin && !isDraft && headSha) {
+    try {
+      const reviewsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${normalizedPrNumber}/reviews`, {
+        method: 'GET',
+        headers
+      });
+      if (reviewsRes.ok) {
+        const reviews = await reviewsRes.json().catch(() => []);
+        if (Array.isArray(reviews)) {
+          // Check if current user has any review that is:
+          // 1. NOT dismissed
+          // 2. NOT stale (commit_id matches current head SHA)
+          const userReview = reviews.find(review => 
+            review.user && 
+            review.user.login && 
+            review.user.login.toLowerCase() === currentUserLogin.toLowerCase() &&
+            review.state !== 'DISMISSED' &&
+            review.commit_id === headSha // Review is on the current commit (not stale)
+          );
+          if (userReview) {
+            userAlreadyReviewed = true;
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail
+    }
+  }
+
   return {
     changedFiles,
     hasConflicts,
     descriptionStatus,
     ciFailed,
     isDraft,
-    reviewerCount
+    reviewerCount,
+    userAlreadyReviewed
   };
 }
 
@@ -404,11 +438,17 @@ function computeReviewabilityScore(prNumber, metrics) {
     descriptionStatus,
     ciFailed,
     isDraft,
-    reviewerCount
+    reviewerCount,
+    userAlreadyReviewed
   } = metrics || {};
 
   // Skip draft PRs entirely (backup check - DOM should catch most)
   if (isDraft === true) {
+    return null;
+  }
+
+  // Skip PRs the user has already reviewed (unless dismissed)
+  if (userAlreadyReviewed === true) {
     return null;
   }
 
@@ -529,6 +569,7 @@ async function annotatePRList() {
   if (!repoInfo) return;
 
   const { owner, repo } = repoInfo;
+  const currentUserLogin = getCurrentUserLogin();
 
   // Try multiple selectors to find PR rows
   let rows = Array.from(
@@ -630,14 +671,14 @@ async function annotatePRList() {
     await Promise.all(
       batch.map(async ({ row, prNumber }) => {
         try {
-          const metrics = await fetchPRReviewabilityData(owner, repo, prNumber, token);
+          const metrics = await fetchPRReviewabilityData(owner, repo, prNumber, token, currentUserLogin);
           const score = computeReviewabilityScore(prNumber, metrics);
           
-          // score is null for draft PRs - skip styling
+          // score is null for draft PRs or PRs user already reviewed - skip styling
           if (score !== null) {
             stylePRRowByScore(row, score);
           } else {
-            row.dataset.lazyReviewScoreDraft = 'true';
+            row.dataset.lazyReviewScoreSkipped = 'true';
           }
         } catch (error) {
           // Silently fail for individual PRs
