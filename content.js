@@ -23,6 +23,62 @@ function isArgoCDRepo() {
   return pathParts[1] === 'anghami' && pathParts[2] === 'argocd';
 }
 
+function getRepoInfoFromPath() {
+  const pathParts = window.location.pathname.split('/');
+  const owner = pathParts[1];
+  const repo = pathParts[2];
+  if (!owner || !repo) {
+    return null;
+  }
+  return { owner, repo };
+}
+
+function isStreamingPRListPage() {
+  if (!isStreamingRepo()) return false;
+  const pathParts = window.location.pathname.split('/');
+  // /{owner}/{repo}/pulls (list page, not individual PR)
+  return pathParts[3] === 'pulls' && !pathParts[4];
+}
+
+function isPRDetailPage() {
+  // Returns true if we're on an individual PR page: /{owner}/{repo}/pull/{number}
+  const pathParts = window.location.pathname.split('/');
+  return pathParts[3] === 'pull' && /^\d+$/.test(pathParts[4] || '');
+}
+
+function getCurrentUserLogin() {
+  const meta = document.querySelector('meta[name="user-login"]');
+  const login = meta && meta.getAttribute('content');
+  if (login && login.trim()) return login.trim();
+  return null;
+}
+
+function getPRAuthorFromDOM() {
+  // Try PR header area
+  const header = document.querySelector('.gh-header-meta');
+  if (header) {
+    const authorAnchor =
+      header.querySelector('a.author') ||
+      header.querySelector('span.author > a') ||
+      header.querySelector('a.Link--primary[data-hovercard-type="user"]');
+    if (authorAnchor) {
+      const text = (authorAnchor.textContent || '').trim();
+      if (text) return text;
+      const href = authorAnchor.getAttribute('href') || '';
+      if (href.startsWith('/')) {
+        const parts = href.split('/').filter(Boolean);
+        if (parts.length > 0) return parts[0];
+      }
+    }
+  }
+  // Fallback: first timeline header author
+  const timelineAuthor = document.querySelector('.timeline-comment-header-text .author');
+  if (timelineAuthor && timelineAuthor.textContent) {
+    return timelineAuthor.textContent.trim();
+  }
+  return null;
+}
+
 // ==================== Button Styling ====================
 
 function getGitHubButtonStyle() {
@@ -131,6 +187,22 @@ async function postPRComment(comment, token) {
   return res;
 }
 
+async function fetchPRAuthor(token) {
+  const { owner, repo, prNumber } = getPRInfo();
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github.v3+json'
+    }
+  });
+  if (!res.ok) {
+    return null;
+  }
+  const data = await res.json().catch(() => null);
+  return data && data.user && data.user.login ? data.user.login : null;
+}
+
 async function lazyApprovePR(token) {
   const { owner, repo, prNumber } = getPRInfo();
   
@@ -175,6 +247,406 @@ async function handleButtonAction(btn, comment, originalContent, successContent,
   } catch (error) {
     setButtonError(btn, '<div>❌</div><div>Error</div>', originalContent);
     alert('❌ Failed to post comment: ' + error.message);
+  }
+}
+
+// ==================== PR Reviewability Scoring ====================
+
+async function fetchPRReviewabilityData(owner, repo, prNumber, token) {
+  const normalizedPrNumber = String(prNumber || '').trim();
+  if (!normalizedPrNumber || !/^\d+$/.test(normalizedPrNumber)) {
+    return {
+      changedFiles: null,
+      hasConflicts: null,
+      descriptionStatus: null,
+      ciFailed: null,
+      isDraft: null,
+      reviewerCount: null
+    };
+  }
+
+  const headers = {
+    'Authorization': `token ${token}`,
+    'Accept': 'application/vnd.github.v3+json'
+  };
+
+  let changedFiles = null;
+  let hasConflicts = null;
+  let descriptionStatus = null; // 'full', 'asana-only', or 'none'
+  let ciFailed = null;
+  let headSha = null;
+  let isDraft = null;
+  let reviewerCount = null;
+
+  // Fetch PR details
+  try {
+    const prRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${normalizedPrNumber}`, {
+      method: 'GET',
+      headers
+    });
+    if (prRes.ok) {
+      const prData = await prRes.json().catch(() => null);
+      if (prData) {
+        if (typeof prData.changed_files === 'number') {
+          changedFiles = prData.changed_files;
+        }
+        const mergeableState = prData.mergeable_state || null;
+        hasConflicts = mergeableState === 'dirty';
+        headSha = prData.head && prData.head.sha ? prData.head.sha : null;
+        
+        // Check draft status (backup check - DOM detection should catch most)
+        isDraft = prData.draft === true;
+        
+        // Count requested reviewers (users + teams)
+        const requestedReviewers = prData.requested_reviewers || [];
+        const requestedTeams = prData.requested_teams || [];
+        reviewerCount = requestedReviewers.length + requestedTeams.length;
+        
+        // Check description status
+        const body = prData.body || '';
+        const trimmedBody = body.trim();
+        
+        if (!trimmedBody) {
+          // Completely empty
+          descriptionStatus = 'none';
+        } else {
+          // Check if it's only the Asana auto-generated text
+          // Pattern: starts with optional whitespace, then ---, then Asana boilerplate
+          const asanaPattern = /^\s*---\s*\n-\s*To see the specific tasks where the Asana app for GitHub is being used/;
+          const bodyWithoutAsana = trimmedBody.replace(/\s*---\s*\n-\s*To see the specific tasks where the Asana app for GitHub is being used[^]*$/, '').trim();
+          
+          if (asanaPattern.test(trimmedBody) && !bodyWithoutAsana) {
+            // Only Asana auto-text, no user description
+            descriptionStatus = 'asana-only';
+          } else if (bodyWithoutAsana) {
+            // Has actual user content
+            descriptionStatus = 'full';
+          } else {
+            // Fallback - treat as having description if there's any content
+            descriptionStatus = 'full';
+          }
+        }
+      }
+    }
+  } catch (error) {
+    // Silently fail - will just skip this metric
+  }
+
+  // Fetch CI status if we have a head SHA and PR is not a draft
+  // We need to check BOTH the Status API (legacy) and Checks API (GitHub Actions)
+  // Skip CI checks for drafts since we'll ignore them anyway
+  if (headSha && !isDraft) {
+    // Check the Checks API first (GitHub Actions and modern CI)
+    try {
+      const checksRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${headSha}/check-runs`, {
+        method: 'GET',
+        headers
+      });
+      if (checksRes.ok) {
+        const checksData = await checksRes.json().catch(() => null);
+        if (checksData && Array.isArray(checksData.check_runs)) {
+          const checkRuns = checksData.check_runs;
+          // If any check run has conclusion of 'failure' or 'cancelled', CI failed
+          const hasFailure = checkRuns.some(run => 
+            run.conclusion === 'failure' || run.conclusion === 'cancelled'
+          );
+          const allComplete = checkRuns.length > 0 && checkRuns.every(run => run.status === 'completed');
+          
+          if (hasFailure) {
+            ciFailed = true;
+          } else if (allComplete && checkRuns.length > 0) {
+            ciFailed = false;
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail
+    }
+
+    // Also check legacy Status API if we haven't determined CI status yet
+    if (ciFailed === null) {
+      try {
+        const statusRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${headSha}/status`, {
+          method: 'GET',
+          headers
+        });
+        if (statusRes.ok) {
+          const statusData = await statusRes.json().catch(() => null);
+          if (statusData && typeof statusData.state === 'string') {
+            const state = statusData.state.toLowerCase();
+            if (state === 'failure' || state === 'error') {
+              ciFailed = true;
+            } else if (state === 'success') {
+              ciFailed = false;
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail
+      }
+    }
+  }
+
+  return {
+    changedFiles,
+    hasConflicts,
+    descriptionStatus,
+    ciFailed,
+    isDraft,
+    reviewerCount
+  };
+}
+
+function computeReviewabilityScore(prNumber, metrics) {
+  const {
+    changedFiles,
+    hasConflicts,
+    descriptionStatus,
+    ciFailed,
+    isDraft,
+    reviewerCount
+  } = metrics || {};
+
+  // Skip draft PRs entirely (backup check - DOM should catch most)
+  if (isDraft === true) {
+    return null;
+  }
+
+  let score = 10;
+  const deductions = [];
+
+  if (typeof changedFiles === 'number') {
+    if (changedFiles >= 60) {
+      score -= 3;
+      deductions.push(`files:${changedFiles}(-3)`);
+    } else if (changedFiles >= 40) {
+      score -= 2;
+      deductions.push(`files:${changedFiles}(-2)`);
+    } else if (changedFiles >= 20) {
+      score -= 1;
+      deductions.push(`files:${changedFiles}(-1)`);
+    }
+  }
+
+  if (hasConflicts === true) {
+    score -= 3;
+    deductions.push('conflicts(-3)');
+  }
+
+  // Description scoring:
+  // - 'none' (completely empty): -2
+  // - 'asana-only' (only auto-generated Asana text): -1
+  // - 'full' (has user content): no deduction
+  if (descriptionStatus === 'none') {
+    score -= 2;
+    deductions.push('no-desc(-2)');
+  } else if (descriptionStatus === 'asana-only') {
+    score -= 1;
+    deductions.push('asana-only-desc(-1)');
+  }
+
+  if (ciFailed === true) {
+    score -= 3;
+    deductions.push('ci-failed(-3)');
+  }
+
+  // Reviewer scoring:
+  // CODEOWNERS automatically adds 3 reviewers, so if <= 3, no extra reviewers were added
+  if (typeof reviewerCount === 'number' && reviewerCount <= 3) {
+    score -= 1;
+    deductions.push(`reviewers:${reviewerCount}(-1)`);
+  }
+
+  if (score < 0) score = 0;
+  if (score > 10) score = 10;
+
+  const breakdown = deductions.length > 0 ? deductions.join(', ') : 'none';
+  console.log(`[LazyPromoter] PR #${prNumber}: score=${score}/10 | deductions: ${breakdown}`);
+
+  return score;
+}
+
+function getScoreBackgroundColor(score) {
+  const clamped = Math.max(0, Math.min(10, score));
+  
+  // For scores < 4, use red shades
+  // For scores >= 4, use green shades
+  // Higher alpha = more saturated/visible
+  
+  if (clamped < 4) {
+    // Red shades for low scores (0-3)
+    // Score 0 = most red, score 3 = lighter red
+    const t = clamped / 3; // 0 to 1 within the red range
+    const alpha = 0.25 - (t * 0.12); // 0.25 down to 0.13
+    return `rgba(208, 48, 48, ${alpha.toFixed(3)})`;
+  } else {
+    // Green shades for acceptable scores (4-10)
+    // Score 4 = light green, score 10 = vibrant green
+    const t = (clamped - 4) / 6; // 0 to 1 within the green range
+    const alpha = 0.08 + (t * 0.22); // 0.08 up to 0.30
+    return `rgba(46, 160, 67, ${alpha.toFixed(3)})`;
+  }
+}
+
+function stylePRRowByScore(row, score) {
+  if (!row) return;
+
+  row.style.backgroundColor = getScoreBackgroundColor(score);
+  row.dataset.lazyReviewScore = String(score);
+  row.dataset.lazyReviewScoreProcessed = 'true';
+
+  // Add / update small numeric badge next to the PR title.
+  const existingBadge = row.querySelector('[data-lazy-review-score-badge="true"]');
+  const labelText = `Reviewability Score: ${score}/10`;
+
+  if (existingBadge) {
+    existingBadge.textContent = labelText;
+    return;
+  }
+
+  const titleLink = row.querySelector('a.Link--primary');
+  if (!titleLink) return;
+
+  const badge = document.createElement('span');
+  badge.setAttribute('data-lazy-review-score-badge', 'true');
+  badge.textContent = labelText;
+  badge.style.display = 'inline-block';
+  badge.style.transform = 'translateY(2px)';
+  badge.style.marginLeft = '8px';
+  badge.style.fontSize = '12px';
+  badge.style.color = 'var(--fgColor-muted, var(--color-fg-muted, #57606a))';
+
+  titleLink.insertAdjacentElement('afterend', badge);
+}
+
+async function annotatePRList() {
+  if (!isStreamingPRListPage()) return;
+
+  const token = await getToken();
+  if (!token) return;
+
+  const repoInfo = getRepoInfoFromPath();
+  if (!repoInfo) return;
+
+  const { owner, repo } = repoInfo;
+
+  // Try multiple selectors to find PR rows
+  let rows = Array.from(
+    document.querySelectorAll('.js-issue-row[data-hovercard-type="pull_request"]')
+  );
+  
+  // Fallback selectors if the first one doesn't work
+  if (rows.length === 0) {
+    rows = Array.from(document.querySelectorAll('[data-id][id^="issue_"]'));
+  }
+  
+  if (rows.length === 0) {
+    rows = Array.from(document.querySelectorAll('.js-issue-row'));
+  }
+
+  if (rows.length === 0) return;
+
+  const itemsToProcess = [];
+
+  rows.forEach((row) => {
+    if (
+      row.dataset.lazyReviewScoreProcessed === 'true' ||
+      row.dataset.lazyReviewScoreProcessing === 'true'
+    ) {
+      return;
+    }
+
+    let prNumber = '';
+    
+    // Method 1: data-issue-number attribute
+    prNumber = (row.getAttribute('data-issue-number') || '').trim();
+    
+    // Method 2: Look for PR link with hovercard
+    if (!prNumber || !/^\d+$/.test(prNumber)) {
+      const prLink = row.querySelector('a[data-hovercard-type="pull_request"]');
+      if (prLink) {
+        const href = prLink.getAttribute('href') || '';
+        const match = href.match(/\/pull\/(\d+)/);
+        if (match && match[1]) {
+          prNumber = match[1];
+        }
+      }
+    }
+    
+    // Method 3: Look for any link containing /pull/
+    if (!prNumber || !/^\d+$/.test(prNumber)) {
+      const anyPullLink = row.querySelector('a[href*="/pull/"]');
+      if (anyPullLink) {
+        const href = anyPullLink.getAttribute('href') || '';
+        const match = href.match(/\/pull\/(\d+)/);
+        if (match && match[1]) {
+          prNumber = match[1];
+        }
+      }
+    }
+    
+    // Method 4: Check the row's id attribute (sometimes like "issue_12345")
+    if (!prNumber || !/^\d+$/.test(prNumber)) {
+      const rowId = row.id || '';
+      const idMatch = rowId.match(/issue_(\d+)/);
+      if (idMatch && idMatch[1]) {
+        prNumber = idMatch[1];
+      }
+    }
+    
+    // Skip invalid PR numbers silently
+    if (!prNumber || !/^\d+$/.test(prNumber)) {
+      row.dataset.lazyReviewScoreProcessed = 'true';
+      row.dataset.lazyReviewScoreProcessing = 'false';
+      return;
+    }
+
+    // Check if PR is a draft from DOM (to avoid API call for drafts)
+    // GitHub shows a "Draft" label/badge in the PR list
+    const isDraftFromDOM = !!(
+      row.querySelector('.State--draft') ||
+      row.querySelector('[title="Draft"]') ||
+      row.querySelector('.label:not([class*="IssueLabel"])') && 
+        row.textContent.includes('Draft')
+    );
+    
+    if (isDraftFromDOM) {
+      // Skip draft PRs entirely - mark as processed but don't score
+      row.dataset.lazyReviewScoreProcessed = 'true';
+      row.dataset.lazyReviewScoreProcessing = 'false';
+      row.dataset.lazyReviewScoreDraft = 'true';
+      return;
+    }
+
+    row.dataset.lazyReviewScoreProcessing = 'true';
+    itemsToProcess.push({ row, prNumber });
+  });
+
+  if (!itemsToProcess.length) return;
+
+  const batchSize = 10;
+  for (let i = 0; i < itemsToProcess.length; i += batchSize) {
+    const batch = itemsToProcess.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map(async ({ row, prNumber }) => {
+        try {
+          const metrics = await fetchPRReviewabilityData(owner, repo, prNumber, token);
+          const score = computeReviewabilityScore(prNumber, metrics);
+          
+          // score is null for draft PRs - skip styling
+          if (score !== null) {
+            stylePRRowByScore(row, score);
+          } else {
+            row.dataset.lazyReviewScoreDraft = 'true';
+          }
+        } catch (error) {
+          // Silently fail for individual PRs
+        } finally {
+          row.dataset.lazyReviewScoreProcessing = 'false';
+          row.dataset.lazyReviewScoreProcessed = 'true';
+        }
+      })
+    );
   }
 }
 
@@ -667,6 +1139,7 @@ function createTabbedPopover() {
 async function addPromoteButton() {
   if (document.getElementById('promote-btn')) return;
   if (!isStreamingRepo()) return;
+  if (!isPRDetailPage()) return;
   
   const token = await getToken();
   if (!token) return;
@@ -700,6 +1173,7 @@ async function addPromoteButton() {
 async function addTestDropdown() {
   if (document.getElementById('test-dropdown-btn')) return;
   if (!isStreamingRepo()) return;
+  if (!isPRDetailPage()) return;
   
   const token = await getToken();
   if (!token) return;
@@ -713,10 +1187,24 @@ async function addTestDropdown() {
 
 async function addApproveButton() {
   if (document.getElementById('approve-btn')) return;
-  if (!isArgoCDRepo()) return;
+  if (!isPRDetailPage()) return;
   
   const token = await getToken();
   if (!token) return;
+
+  // Do not show Approve button if current user is the PR author
+  const currentLogin = getCurrentUserLogin();
+  let prAuthor = getPRAuthorFromDOM();
+  if (!prAuthor) {
+    try {
+      prAuthor = await fetchPRAuthor(token);
+    } catch (e) {
+      // ignore and proceed; if unknown, we will show the button
+    }
+  }
+  if (currentLogin && prAuthor && currentLogin.toLowerCase() === prAuthor.toLowerCase()) {
+    return;
+  }
 
   const toolbar = document.querySelector('.gh-header-actions');
   if (!toolbar) return; 
@@ -749,9 +1237,18 @@ async function addButtons() {
   await addApproveButton();
 }
 
+async function runEnhancements() {
+  try {
+    await addButtons();
+    await annotatePRList();
+  } catch (error) {
+    // Silently fail
+  }
+}
+
 // Initialize after DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  addButtons();
+  runEnhancements();
 });
 
 // If DOM is already loaded, run immediately
@@ -759,10 +1256,10 @@ if (document.readyState === 'loading') {
   // Document is still loading, wait for DOMContentLoaded
 } else {
   // DOM is already loaded
-  addButtons();
+  runEnhancements();
 }
 
-// github navigates without full page reload, so if we did not start at the pr page, the code will not find the toolbar div to add the button, and it wont trigger again when we navigate to the pr page
+// GitHub navigates without full page reload, poll to handle SPA navigation
 setInterval(() => {
-  addButtons();
-}, 1000);
+  runEnhancements();
+}, 3000);
