@@ -7,6 +7,7 @@
 This Chrome extension adds:
 - "🚀 Promote" button and "🧪 Run tests" dropdown on PRs in `anghami/web-streaming-monorepo`
 - "👍 Approve" button on PRs in `anghami/argocd`
+- **PR Reviewability Scoring** on the PR list page in `anghami/web-streaming-monorepo`
 
 <img src="./example.png" alt="example" style="border-radius: 6px; border: 1px solid #fff2"/>
 
@@ -25,12 +26,40 @@ This Chrome extension adds:
 
 ### Approve Button (argocd only)
 - Appears only on PR pages in `anghami/argocd`
-- Approves the PR in a single click using GitHub’s reviews API (`event: "APPROVE"`)
+- Approves the PR in a single click using GitHub's reviews API (`event: "APPROVE"`)
 - Shows loader and success/error states
 - Requirements and caveats:
   - You must have permission to review in the repo
   - You cannot approve your own PR
   - Draft PRs cannot be approved
+
+### PR Reviewability Scoring
+Automatically scores PRs on the pull request list page to help you prioritize which PRs to review first.
+
+**How it works:**
+- PRs are color-coded: **green** (score ≥ 4) or **red** (score < 4)
+- Higher saturation = more extreme score (very good or very bad)
+- Draft PRs are ignored entirely
+
+**Scoring criteria:**
+
+| Metric | Condition | Deduction |
+|--------|-----------|-----------|
+| Files changed | 20-39 files | -1 |
+| Files changed | 40-59 files | -2 |
+| Files changed | 60+ files | -3 |
+| Merge conflicts | Has conflicts | -3 |
+| No description | Completely empty | -2 |
+| Auto-only description | Only Asana auto-text | -1 |
+| CI/CD failed | Any check failed/cancelled | -3 |
+| Few reviewers | ≤ 3 reviewers (only CODEOWNERS) | -1 |
+
+**Example log output:**
+You can check the console logs to see why a PR is scored the way it is
+```
+[LazyPromoter] PR #2715: score=6/10 | deductions: files:170(-3), no-desc(-2)
+[LazyPromoter] PR #2703: score=9/10 | deductions: asana-only-desc(-1)
+```
 
 ## Setup
 
@@ -61,8 +90,9 @@ git clone git@github.com:mohammad-makkeh-anghami/lazy-promoter.git
 - Your GitHub token is stored securely using Chrome's sync storage
 - The token never leaves your browser except to talk to GitHub's API
 - The extension only activates on our specific repositories:
-  - `anghami/web-streaming-monorepo` (Promote, Run tests)
+  - `anghami/web-streaming-monorepo` (Promote, Run tests, PR Scoring)
   - `anghami/argocd` (Approve)
+- PR scoring only runs on the PR list page of web-streaming-monorepo and fetches data for visible PRs only (no pagination)
 
 
 > This is an experiment to see how we can improve DX and productivity using such tools. I may end up creating a full toolbar for anghami + osn stuff that is added to our GitHub pages if you guys suggest some stuff that could be useful
