@@ -215,7 +215,7 @@ async function lazyApprovePR(token) {
     },
     body: JSON.stringify({
       event: 'APPROVE',
-      body: 'Approved via Lazy Promoter'
+      body: 'Approved via [Lazy Promoter](https://github.com/mohammad-makkeh-anghami/lazy-promoter)'
     })
   });
 
