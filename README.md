@@ -6,7 +6,7 @@
 
 This Chrome extension adds:
 - "🚀 Promote" button and "🧪 Run tests" dropdown on PRs in `anghami/web-streaming-monorepo`
-- "👍 Approve" button on PRs in `anghami/argocd`
+- "👍 Approve" button on PRs in `anghami/argocd` and `anghami/web-streaming-monorepo`
 - **PR Reviewability Scoring** on the PR list page in `anghami/web-streaming-monorepo`
 
 <img src="./example.png" alt="example" style="border-radius: 6px; border: 1px solid #fff2"/>
