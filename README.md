@@ -24,10 +24,8 @@ This Chrome extension adds:
   - **Run Web e2e tests** - Posts `/test-e2e web` comment
 - Shows loading and success states, just like the Promote button
 
-### Approve Button (argocd only)
-- Appears only on PR pages in `anghami/argocd`
-- Approves the PR in a single click using GitHub's reviews API (`event: "APPROVE"`)
-- Shows loader and success/error states
+### Approve Button
+- Approves the PR in a single click instead of 4
 - Requirements and caveats:
   - You must have permission to review in the repo
   - You cannot approve your own PR
